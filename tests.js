@@ -197,3 +197,36 @@ test("niski i wysoki naraz → akord", () => {
     assertEqual([pair.length, pair[0] <= 1, pair[1] >= 2], [2, true, true]);
   }
 });
+
+// --- Postać (character.js) ---
+// held = które klawisze (D F J K) są trzymane, pressedAt = kiedy (s) każdy był ostatnio wciśnięty.
+
+const NEVER = -Infinity;
+
+test("nic nie wciśnięte → postać stoi", () => {
+  assertEqual(Character.pose([false, false, false, false], [NEVER, NEVER, NEVER, NEVER], 10), "stoi");
+});
+
+test("trzymany klawisz → jego poza", () => {
+  assertEqual(Character.pose([false, false, true, false], [NEVER, NEVER, 5, NEVER], 10), "j");
+});
+
+test("krótkie stuknięcie trwa co najmniej 0,15 s", () => {
+  const pressedAt = [9.9, NEVER, NEVER, NEVER];
+  assertEqual(Character.pose([false, false, false, false], pressedAt, 10), "d");
+  assertEqual(Character.pose([false, false, false, false], pressedAt, 10.1), "stoi");
+});
+
+test("akord → poza ostatnio wciśniętego klawisza", () => {
+  assertEqual(Character.pose([true, false, false, true], [9, NEVER, NEVER, 9.5], 10), "k");
+});
+
+test("po puszczeniu ostatniego wraca do wcześniej trzymanego", () => {
+  assertEqual(Character.pose([true, true, false, false], [8, 9.5, NEVER, NEVER], 10), "f");
+  assertEqual(Character.pose([true, false, false, false], [8, 9.5, NEVER, NEVER], 10), "d");
+});
+
+test("podskok: start z ziemi, najwyżej w połowie, potem z powrotem na ziemi", () => {
+  const top = Character.bounce(Character.BOUNCE_TIME / 2);
+  assertEqual([Character.bounce(0), top === Character.BOUNCE_HEIGHT, Character.bounce(1), Character.bounce(-1)], [0, true, 0, 0]);
+});

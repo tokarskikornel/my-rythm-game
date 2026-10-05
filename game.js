@@ -450,11 +450,46 @@ function drawHud() {
   ctx.restore();
 }
 
+// --- Postać ---
+// Obrazki z images/postac/. Gdy któregoś brakuje, gra działa dalej, tylko bez postaci.
+
+const characterImages = {};
+for (const pose of ["stoi", ...Character.POSES]) {
+  const image = new Image();
+  image.src = "images/postac/" + pose + ".svg";
+  characterImages[pose] = image;
+}
+const characterPressedAt = [-Infinity, -Infinity, -Infinity, -Infinity]; // kiedy (s) wciśnięto D F J K
+let characterLastPress = -Infinity;
+
+// Postać po lewej stronie ścieżek, pod licznikiem punktów. Tańczy tylko w trakcie gry.
+function drawCharacter(hitY) {
+  const now = performance.now() / 1000;
+  const held = game.screen === "playing" ? game.pressed : [false, false, false, false];
+  const image = characterImages[Character.pose(held, characterPressedAt, now)];
+  if (!image.complete || image.naturalWidth === 0) return;
+
+  const top = 170; // pod licznikiem punktów
+  const bottom = hitY + 56; // stopy na wysokości klawiszy
+  const space = laneX(0) - 40; // miejsce między lewą krawędzią a ścieżkami
+  let h = Math.min(bottom - top, height * 0.6);
+  let w = (h * 2) / 3; // obrazki mają proporcje 2:3
+  if (w > space) {
+    w = space;
+    h = w * 1.5;
+  }
+  if (w < 100) return; // za wąski ekran — chowamy postać, żeby nie zasłaniała nut
+  const x = (laneX(0) - w) / 2;
+  const y = bottom - h - Character.bounce(now - characterLastPress);
+  ctx.drawImage(image, x, y, w, h);
+}
+
 function draw() {
   ctx.fillStyle = "#0a0a14";
   ctx.fillRect(0, 0, width, height);
   const hitY = height * HIT_LINE;
   drawLanes(hitY);
+  drawCharacter(hitY);
   if (!game.level) return;
   const now = game.clock.now();
   drawNotes(now, hitY);
@@ -484,6 +519,10 @@ window.addEventListener("keydown", (event) => {
   game.pressed[lane] = true;
   // Przytrzymany klawisz wysyła powtórzenia — nie mogą trafiać kolejnych nut.
   if (event.repeat || game.screen !== "playing") return;
+  // Postać: zapamiętujemy, kiedy wciśnięto klawisz (poza + podskok).
+  const seconds = performance.now() / 1000;
+  characterPressedAt[lane] = seconds;
+  characterLastPress = seconds;
   const now = game.clock.now();
   const index = Rules.findHittableNote(game.notes, lane, now);
   if (index === -1) return; // wciśnięcie "w pustkę" niczego nie psuje
