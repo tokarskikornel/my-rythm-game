@@ -1,78 +1,117 @@
 #!/bin/sh
-# Rysuje 5 póz postaci (chibi Haimiya Mio, fan art) jako pliki SVG w images/postac/.
+# Rysuje 5 póz postaci (Haimiya Mio, fan art w uproszczonym stylu anime) jako pliki SVG w images/postac/.
 # Uruchom z głównego folderu projektu w Git Bash: sh tools/draw-character.sh
 out=images/postac
-SKIN="#f6dccd"; HAIR="#c4cad6"; HAIR_BACK="#a9b0c0"; TOP="#22222e"; LINE="#55557a"
+SKIN="#fbe2d4"; SKIN_LINE="#d9a493"; HAIR="#d5dae4"; HAIR_SHADE="#a9b0c2"; HAIR_LINE="#7c8398"; HAIR_LIGHT="#f4f6fb"
+TOP="#202029"; TOP_LINE="#5c5c84"; JEANS="#4f709c"; JEANS_DARK="#3e5c86"; JEANS_LINE="#2c4366"; RIP="#d8e0ec"
+# Głowa jest rysowana w dużej skali i zmniejszana — proporcje bliższe oryginałowi niż chibi.
+HEAD_SCALE="translate(100 124) scale(0.78) translate(-100 -124)"
 
-arm() { # arm "x1 y1 x2 y2 x3 y3" — rękaw (obrys + kolor) i dłoń na końcu
+arm() { # arm "barkX barkY łokiećX łokiećY dłońX dłońY" — wygięty rękaw (krzywa) i dłoń
   set -- $1
-  echo "<path d=\"M$1 $2 L$3 $4 L$5 $6\" fill=\"none\" stroke=\"$LINE\" stroke-width=\"15\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"
-  echo "<path d=\"M$1 $2 L$3 $4 L$5 $6\" fill=\"none\" stroke=\"$TOP\" stroke-width=\"11\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"
-  echo "<circle cx=\"$5\" cy=\"$6\" r=\"6.5\" fill=\"$SKIN\" stroke=\"$LINE\" stroke-width=\"1.5\"/>"
+  echo "<path d=\"M$1 $2 Q$3 $4 $5 $6\" fill=\"none\" stroke=\"$TOP_LINE\" stroke-width=\"12.5\" stroke-linecap=\"round\"/>"
+  echo "<path d=\"M$1 $2 Q$3 $4 $5 $6\" fill=\"none\" stroke=\"$TOP\" stroke-width=\"9.5\" stroke-linecap=\"round\"/>"
+  echo "<circle cx=\"$5\" cy=\"$6\" r=\"5\" fill=\"$SKIN\" stroke=\"$SKIN_LINE\" stroke-width=\"1.2\"/>"
 }
 
-eye() { # eye x — oko patrzące spod półprzymkniętej powieki
-  x=$1
-  echo "<ellipse cx=\"$x\" cy=\"103\" rx=\"10\" ry=\"11\" fill=\"#fff\"/>"
-  echo "<ellipse cx=\"$((x + 1))\" cy=\"105\" rx=\"7.5\" ry=\"9\" fill=\"#5f7fe0\"/>"
-  echo "<ellipse cx=\"$((x + 1))\" cy=\"107\" rx=\"3.5\" ry=\"4.5\" fill=\"#1d2550\"/>"
-  echo "<circle cx=\"$((x - 2))\" cy=\"101\" r=\"2.5\" fill=\"#fff\"/>"
-  echo "<path d=\"M$((x - 14)) 90 H$((x + 14)) V98 Q$x 93 $((x - 14)) 98 Z\" fill=\"$SKIN\"/>"
-  echo "<path d=\"M$((x - 13)) 98 Q$x 92 $((x + 13)) 98\" fill=\"none\" stroke=\"#2a2a3a\" stroke-width=\"3.5\" stroke-linecap=\"round\"/>"
+eye() { # eye x strona(-1 lewe, 1 prawe) — półprzymknięte, "chłodne" oko
+  x=$1; s=$2; id=eye$x
+  shape="M$((x - 11)) 89 C$((x - 6)) 82 $((x + 6)) 82 $((x + 11)) 89 C$((x + 6)) 97 $((x - 6)) 97 $((x - 11)) 89 Z"
+  echo "<clipPath id=\"$id\"><path d=\"$shape\"/></clipPath>"
+  echo "<path d=\"$shape\" fill=\"#fff\"/>"
+  echo "<g clip-path=\"url(#$id)\">"
+  echo "<ellipse cx=\"$x\" cy=\"90.5\" rx=\"6.5\" ry=\"8\" fill=\"url(#iris)\"/>"
+  echo "<ellipse cx=\"$x\" cy=\"91.5\" rx=\"2.8\" ry=\"3.8\" fill=\"#1b2152\"/>"
+  echo "<path d=\"M$((x - 11)) 84 H$((x + 11)) V88 C$((x + 6)) 85 $((x - 6)) 85 $((x - 11)) 89 Z\" fill=\"#c9d2ec\" opacity=\"0.6\"/>"
+  echo "</g>"
+  echo "<circle cx=\"$((x - 2))\" cy=\"88\" r=\"1.8\" fill=\"#fff\"/>"
+  # powieka i rzęsy
+  echo "<path d=\"M$((x - 12)) 89 C$((x - 6)) 81 $((x + 6)) 81 $((x + 12)) 89\" fill=\"none\" stroke=\"#26222f\" stroke-width=\"2.6\" stroke-linecap=\"round\"/>"
+  echo "<path d=\"M$((x + 11 * s)) 89 Q$((x + 14 * s)) 89.5 $((x + 16 * s)) 91\" fill=\"none\" stroke=\"#26222f\" stroke-width=\"1.8\" stroke-linecap=\"round\"/>"
+  echo "<path d=\"M$((x - 7)) 96 Q$x 97.5 $((x + 7)) 96\" fill=\"none\" stroke=\"#b98a8f\" stroke-width=\"1\" stroke-linecap=\"round\"/>"
+  # brew prześwitująca spod grzywki
+  echo "<path d=\"M$((x - 9)) 76 Q$x 73.5 $((x + 9)) 76\" fill=\"none\" stroke=\"$HAIR_LINE\" stroke-width=\"1.3\" stroke-linecap=\"round\" opacity=\"0.8\"/>"
 }
 
 pose() { # pose nazwa kąt "lewa ręka" "prawa ręka"
   name=$1; angle=$2; left=$3; right=$4
   {
-    echo '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300" width="400" height="600">'
-    echo '<defs><filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#2bd9ff" flood-opacity="0.7"/></filter></defs>'
-    echo "<g filter=\"url(#glow)\" transform=\"rotate($angle 100 276)\">"
-    # włosy z tyłu — długie, do pasa
-    echo "<path d=\"M42 86 Q36 26 100 22 Q164 26 158 86 L164 196 Q152 206 140 192 L134 128 L66 128 L60 192 Q48 206 36 196 Z\" fill=\"$HAIR_BACK\"/>"
-    # szerokie, podarte jeansy i buty
-    echo '<path d="M72 196 L100 196 L100 270 L58 270 Q62 230 72 196 Z" fill="#46658e"/>'
-    echo '<path d="M100 196 L128 196 Q138 230 142 270 L100 270 Z" fill="#4f709b"/>'
-    echo '<rect x="71" y="193" width="58" height="8" rx="2" fill="#5b7aa3"/>'
-    echo '<path d="M68 226 L90 219 L92 226 L70 234 Z" fill="#c9d3e3"/>'
-    echo '<rect x="108" y="236" width="20" height="10" rx="2" fill="#c9d3e3"/>'
-    echo '<rect x="113" y="252" width="16" height="6" rx="1" fill="#d7dfec"/>'
-    echo "<ellipse cx=\"78\" cy=\"274\" rx=\"21\" ry=\"7\" fill=\"#151520\" stroke=\"$LINE\" stroke-width=\"2\"/>"
-    echo "<ellipse cx=\"122\" cy=\"274\" rx=\"21\" ry=\"7\" fill=\"#151520\" stroke=\"$LINE\" stroke-width=\"2\"/>"
-    # brzuch i czarny crop top z wiązaniem przy dekolcie
-    echo "<rect x=\"78\" y=\"184\" width=\"44\" height=\"12\" fill=\"$SKIN\"/>"
-    echo "<path d=\"M74 146 Q100 138 126 146 L130 188 Q100 194 70 188 Z\" fill=\"$TOP\" stroke=\"$LINE\" stroke-width=\"2\"/>"
-    echo "<path d=\"M92 136 L108 136 L106 150 Q100 154 94 150 Z\" fill=\"$SKIN\"/>"
-    echo '<path d="M97 152 L100 159 L103 152 M100 152 L100 164" fill="none" stroke="#9a9ac0" stroke-width="1.5"/>'
+    echo "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 200 300\" width=\"400\" height=\"600\">"
+    echo "<defs>"
+    echo "<filter id=\"glow\" x=\"-20%\" y=\"-20%\" width=\"140%\" height=\"140%\"><feDropShadow dx=\"0\" dy=\"0\" stdDeviation=\"2\" flood-color=\"#2bd9ff\" flood-opacity=\"0.55\"/></filter>"
+    echo "<linearGradient id=\"iris\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#34449a\"/><stop offset=\"1\" stop-color=\"#9db6f2\"/></linearGradient>"
+    echo "</defs>"
+    echo "<g filter=\"url(#glow)\" transform=\"rotate($angle 100 284)\">"
+
+    # długie włosy z tyłu, falujące końcówki
+    echo "<g transform=\"$HEAD_SCALE\">"
+    echo "<path d=\"M52 72 C50 30 150 30 148 72 C158 116 156 168 166 226 C156 236 146 230 140 222 C143 232 132 236 126 226 C130 194 128 160 126 132 L74 132 C72 160 70 194 74 226 C68 236 57 232 60 222 C54 230 44 236 34 226 C44 168 42 116 52 72 Z\" fill=\"$HAIR_SHADE\" stroke=\"$HAIR_LINE\" stroke-width=\"1.2\"/>"
+    echo "</g>"
+
+    # luźne jeansy z postrzępionymi dziurami
+    echo "<path d=\"M81 190 L100 192 L100 278 C88 281 76 281 66 277 C70 250 75 220 81 190 Z\" fill=\"$JEANS_DARK\" stroke=\"$JEANS_LINE\" stroke-width=\"1.2\"/>"
+    echo "<path d=\"M100 192 L119 190 C125 220 130 250 134 277 C124 281 112 281 100 278 Z\" fill=\"$JEANS\" stroke=\"$JEANS_LINE\" stroke-width=\"1.2\"/>"
+    echo "<path d=\"M80 188 C93 191 107 191 120 188 L120 195 C107 198 93 198 80 195 Z\" fill=\"#6286b4\" stroke=\"$JEANS_LINE\" stroke-width=\"1\"/>"
+    echo "<path d=\"M88 214 C84 230 79 246 75 258\" fill=\"none\" stroke=\"$JEANS_LINE\" stroke-width=\"1\" opacity=\"0.6\"/>"
+    echo "<path d=\"M112 214 C116 232 121 248 125 262\" fill=\"none\" stroke=\"$JEANS_LINE\" stroke-width=\"1\" opacity=\"0.6\"/>"
+    echo "<path d=\"M74 226 C80 222 87 219 93 218 C92 222 93 225 91 228 C85 229 79 232 73 235 C74 232 73 229 74 226 Z\" fill=\"$RIP\"/>"
+    echo "<path d=\"M107 236 C113 235 119 235 125 236 C124 240 125 243 126 246 C119 245 113 245 107 246 C108 243 107 239 107 236 Z\" fill=\"$RIP\"/>"
+    echo "<path d=\"M110 254 C115 253 120 254 126 255 L127 262 C121 261 115 261 110 262 Z\" fill=\"$RIP\"/>"
+    echo "<path d=\"M75 228 l2 4 M80 225 l2 5 M85 223 l2 5 M90 221 l1 5 M110 238 l1 5 M115 237 l1 6 M120 237 l1 6 M113 255 l1 5 M119 256 l1 5\" stroke=\"#fff\" stroke-width=\"1\" opacity=\"0.8\"/>"
+
+    # czarne buty
+    echo "<path d=\"M67 276 C63 290 95 292 98 283 C98 276 74 271 67 276 Z\" fill=\"#15151d\" stroke=\"$TOP_LINE\" stroke-width=\"1.5\"/>"
+    echo "<path d=\"M133 276 C137 290 105 292 102 283 C102 276 126 271 133 276 Z\" fill=\"#15151d\" stroke=\"$TOP_LINE\" stroke-width=\"1.5\"/>"
+
+    # brzuch i dopasowany czarny crop top z kwadratowym dekoltem i wiązaniem
+    echo "<path d=\"M81 180 C93 183 107 183 119 180 L120 190 C107 193 93 193 80 190 Z\" fill=\"$SKIN\"/>"
+    echo "<path d=\"M80 134 C89 129 111 129 120 134 C124 150 124 166 121 183 C107 187 93 187 79 183 C76 166 76 150 80 134 Z\" fill=\"$TOP\" stroke=\"$TOP_LINE\" stroke-width=\"1.5\"/>"
+    echo "<path d=\"M94 116 L106 116 L107 132 C104 136 96 136 93 132 Z\" fill=\"$SKIN\"/>"
+    echo "<path d=\"M87 133 L113 133 L111 143 C104 146 96 146 89 143 Z\" fill=\"$SKIN\" stroke=\"$SKIN_LINE\" stroke-width=\"1\"/>"
+    echo "<path d=\"M97 143 C98 146 99 147 100 147 C101 147 102 146 103 143 M100 147 L98 156 M100 147 L102 155\" fill=\"none\" stroke=\"#9898c0\" stroke-width=\"1.1\"/>"
+    echo "<path d=\"M94 140 C97 141 103 141 106 140\" fill=\"none\" stroke=\"$SKIN_LINE\" stroke-width=\"0.8\"/>"
+
     # mała czarna torebka na ramię
-    echo '<path d="M122 148 L133 176" stroke="#15151f" stroke-width="2.5"/>'
-    echo "<rect x=\"125\" y=\"175\" width=\"17\" height=\"14\" rx=\"3\" fill=\"#15151f\" stroke=\"$LINE\" stroke-width=\"2\"/>"
-    # twarz
-    echo "<ellipse cx=\"100\" cy=\"88\" rx=\"48\" ry=\"46\" fill=\"$SKIN\"/>"
-    eye 80
-    eye 120
-    echo '<ellipse cx="70" cy="119" rx="8" ry="4" fill="#ff8fb0" opacity="0.45"/>'
-    echo '<ellipse cx="130" cy="119" rx="8" ry="4" fill="#ff8fb0" opacity="0.45"/>'
-    echo '<path d="M96 125 Q100 127 104 125" fill="none" stroke="#a0505a" stroke-width="2" stroke-linecap="round"/>'
-    # pasma włosów przy twarzy i grzywka zaczesana na bok
-    echo "<path d=\"M52 80 Q44 122 58 170 Q67 150 64 118 Q62 96 62 84 Z\" fill=\"$HAIR\"/>"
-    echo "<path d=\"M148 80 Q156 122 142 170 Q133 150 136 118 Q138 96 138 84 Z\" fill=\"$HAIR\"/>"
-    echo "<path d=\"M50 90 Q46 34 100 32 Q154 34 150 90 Q144 66 128 58 Q128 76 118 92 Q114 70 100 62 Q92 78 76 90 Q80 72 84 62 Q66 70 58 94 Z\" fill=\"$HAIR\"/>"
-    echo '<path d="M70 46 Q100 38 130 46" fill="none" stroke="#eef1f7" stroke-width="3" opacity="0.8"/>'
-    # okulary na głowie i kolczyki-kółka
-    echo '<g fill="rgba(200,230,255,0.25)" stroke="#111" stroke-width="4"><rect x="66" y="33" width="28" height="15" rx="3"/><rect x="106" y="33" width="28" height="15" rx="3"/></g>'
-    echo '<path d="M94 39 L106 39" stroke="#111" stroke-width="4"/>'
-    echo '<circle cx="54" cy="116" r="5" fill="none" stroke="#e8ecf5" stroke-width="2"/>'
-    echo '<circle cx="146" cy="116" r="5" fill="none" stroke="#e8ecf5" stroke-width="2"/>'
-    # ręce na samym wierzchu, żeby było widać taniec
+    echo "<path d=\"M117 134 C123 150 127 162 129 172\" fill=\"none\" stroke=\"#15151d\" stroke-width=\"2\"/>"
+    echo "<path d=\"M123 170 C129 169 135 169 139 171 L139 184 C133 186 127 186 123 184 Z\" fill=\"#15151d\" stroke=\"$TOP_LINE\" stroke-width=\"1.5\"/>"
+
+    # głowa (zmniejszona): twarz, oczy, włosy z przodu, okulary, kolczyki
+    echo "<g transform=\"$HEAD_SCALE\">"
+    echo "<path d=\"M58 72 C58 102 76 120 100 122 C124 120 142 102 142 72 C142 44 58 44 58 72 Z\" fill=\"$SKIN\" stroke=\"$SKIN_LINE\" stroke-width=\"1.2\"/>"
+    eye 82 -1
+    eye 118 1
+    # nosek, usta, rumieniec z kreseczkami
+    echo "<path d=\"M100 99 L99 102\" stroke=\"$SKIN_LINE\" stroke-width=\"1.2\" stroke-linecap=\"round\"/>"
+    echo "<ellipse cx=\"100\" cy=\"109\" rx=\"2.3\" ry=\"1.6\" fill=\"#c46e78\"/>"
+    echo "<ellipse cx=\"78\" cy=\"100\" rx=\"8\" ry=\"3.5\" fill=\"#ff8fa8\" opacity=\"0.45\"/>"
+    echo "<ellipse cx=\"122\" cy=\"100\" rx=\"8\" ry=\"3.5\" fill=\"#ff8fa8\" opacity=\"0.45\"/>"
+    echo "<path d=\"M73 101 l2 -3 M77 101 l2 -3 M81 101 l2 -3 M117 101 l2 -3 M121 101 l2 -3 M125 101 l2 -3\" stroke=\"#e86a8a\" stroke-width=\"0.9\" opacity=\"0.8\"/>"
+    # pasma włosów przy twarzy, do piersi
+    echo "<path d=\"M59 70 C50 100 50 140 58 176 C61 170 63 162 64 154 C67 162 70 168 75 172 C68 142 65 110 66 84 Z\" fill=\"$HAIR\" stroke=\"$HAIR_LINE\" stroke-width=\"1.1\"/>"
+    echo "<path d=\"M141 70 C150 100 150 140 142 176 C139 170 137 162 136 154 C133 162 130 168 125 172 C132 142 135 110 134 84 Z\" fill=\"$HAIR\" stroke=\"$HAIR_LINE\" stroke-width=\"1.1\"/>"
+    # grzywka zaczesana na bok, z długim kosmykiem przez czoło
+    echo "<path d=\"M56 78 C50 40 80 28 102 28 C128 28 150 42 146 80 C141 70 136 63 129 58 C131 70 128 82 121 92 C120 78 116 66 108 59 C106 74 101 88 94 98 C94 84 92 72 88 63 C80 72 71 79 63 92 C61 86 58 82 56 78 Z\" fill=\"$HAIR\" stroke=\"$HAIR_LINE\" stroke-width=\"1.2\" stroke-linejoin=\"round\"/>"
+    echo "<path d=\"M108 59 C104 70 100 80 94 98\" fill=\"none\" stroke=\"$HAIR_SHADE\" stroke-width=\"1.2\"/>"
+    echo "<path d=\"M88 63 C84 72 76 80 70 86\" fill=\"none\" stroke=\"$HAIR_SHADE\" stroke-width=\"1\"/>"
+    echo "<path d=\"M70 44 C84 36 112 34 132 44\" fill=\"none\" stroke=\"$HAIR_LIGHT\" stroke-width=\"3\" stroke-linecap=\"round\" opacity=\"0.9\"/>"
+    # okulary na głowie
+    echo "<g fill=\"rgba(210,235,255,0.35)\" stroke=\"#121218\" stroke-width=\"3.2\" stroke-linejoin=\"round\"><path d=\"M68 36 C68 31 94 31 95 35 L94 45 C92 49 70 49 69 45 Z\"/><path d=\"M105 35 C106 31 132 31 132 36 L131 45 C130 49 108 49 106 45 Z\"/></g>"
+    echo "<path d=\"M95 38 C98 36 102 36 105 38\" fill=\"none\" stroke=\"#121218\" stroke-width=\"3\"/>"
+    # kolczyki-kółka
+    echo "<circle cx=\"60\" cy=\"104\" r=\"4.5\" fill=\"none\" stroke=\"#eef1f7\" stroke-width=\"1.8\"/>"
+    echo "<circle cx=\"140\" cy=\"104\" r=\"4.5\" fill=\"none\" stroke=\"#eef1f7\" stroke-width=\"1.8\"/>"
+    echo "</g>"
+
+    # ręce na wierzchu, żeby było widać taniec
     arm "$left"
     arm "$right"
-    echo '</g></svg>'
+    echo "</g></svg>"
   } > "$out/$name.svg"
 }
 
-#     nazwa kąt  lewa ręka                    prawa ręka
-pose  stoi   0   "78 150 70 172 68 190"       "122 150 136 170 128 152"
-pose  d     -7   "78 150 50 124 34 90 "       "122 150 130 172 132 190"
-pose  f     -3   "78 150 56 150 52 116"       "122 150 138 166 128 184"
-pose  j      3   "78 150 62 166 72 184"       "122 150 144 150 148 116"
-pose  k      7   "78 150 70 172 68 190"       "122 150 150 124 166 90 "
+#     nazwa kąt  lewa ręka               prawa ręka
+pose  stoi   0   "81 138 72 166 75 190"  "119 138 136 160 125 142"
+pose  d     -6   "81 138 60 120 54 92"   "119 138 128 166 125 190"
+pose  f     -3   "81 138 62 150 66 118"  "119 138 134 160 121 178"
+pose  j      3   "81 138 66 160 79 178"  "119 138 138 150 134 118"
+pose  k      6   "81 138 72 166 75 190"  "119 138 140 120 146 92"
