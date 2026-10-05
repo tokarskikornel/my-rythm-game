@@ -133,3 +133,67 @@ test("seek w pauzie", () => {
   ms = 10000;
   assertEqual(c.now(), 4);
 });
+
+// --- Generator nut (generator.js) ---
+
+// Sztuczna "piosenka": cisza z krótkimi (30 ms) zanikającymi impulsami w podanych chwilach.
+function makeSignal(seconds, rate, times) {
+  const s = new Float32Array(Math.round(seconds * rate));
+  for (const t of times) {
+    const start = Math.round(t * rate);
+    const len = Math.round(0.03 * rate);
+    for (let i = 0; i < len && start + i < s.length; i++) s[start + i] = Math.sin(i * 0.7) * (1 - i / len);
+  }
+  return s;
+}
+const RATE = 8000;
+const silence = (sec) => new Float32Array(sec * RATE);
+const near = (a, b) => Math.abs(a - b) <= 0.02;
+
+test("siła uderzenia rośnie tylko przy skoku energii", () => {
+  const s = Generator.onsetStrength([0, 0, 1, 1]);
+  assertEqual([s[0], s[1], Math.abs(s[2] - Math.log(1.001 / 0.001)) < 1e-9, s[3]], [0, 0, true, 0]);
+});
+
+test("impulsy co 0,5 s → nuty co 0,5 s na ścieżkach niskich", () => {
+  const times = [1, 1.5, 2, 2.5, 3, 3.5];
+  const notes = Generator.generateNotes({ low: makeSignal(5, RATE, times), mid: silence(5), high: silence(5) }, RATE);
+  assertEqual(notes.length, 6);
+  assertEqual(notes.every((n, i) => near(n.time, times[i]) && (n.lane === 0 || n.lane === 1)), true);
+});
+
+test("ta sama ścieżka nie dostaje dwóch nut z rzędu", () => {
+  const times = [1, 1.5, 2, 2.5, 3, 3.5];
+  const notes = Generator.generateNotes({ low: makeSignal(5, RATE, times), mid: silence(5), high: silence(5) }, RATE);
+  assertEqual(notes.every((n, i) => i === 0 || n.lane !== notes[i - 1].lane), true);
+});
+
+test("cisza → 0 nut", () => {
+  assertEqual(Generator.generateNotes({ low: silence(3), mid: silence(3), high: silence(3) }, RATE), []);
+});
+
+test("stały dźwięk bez uderzeń → najwyżej 1 nuta", () => {
+  const tone = new Float32Array(3 * RATE).map((_, i) => 0.5 * Math.sin((2 * Math.PI * 200 * i) / RATE));
+  const notes = Generator.generateNotes({ low: tone, mid: silence(3), high: silence(3) }, RATE);
+  assertEqual(notes.length <= 1, true);
+});
+
+test("najwyżej 4 nuty na sekundę", () => {
+  const times = [];
+  for (let t = 1; t < 3; t += 0.1) times.push(t);
+  const notes = Generator.generateNotes({ low: makeSignal(4, RATE, times), mid: silence(4), high: silence(4) }, RATE);
+  const perSecond = [1, 1.5, 2].map((t) => notes.filter((n) => n.time >= t && n.time < t + 1).length);
+  assertEqual(perSecond.every((count) => count > 0 && count <= 4), true);
+  const gapsOk = notes.every((n, i) => i === 0 || n.time === notes[i - 1].time || n.time - notes[i - 1].time >= 0.249);
+  assertEqual(gapsOk, true);
+});
+
+test("niski i wysoki naraz → akord", () => {
+  const notes = Generator.generateNotes(
+    { low: makeSignal(3, RATE, [1, 2]), mid: silence(3), high: makeSignal(3, RATE, [1, 2]) }, RATE);
+  assertEqual(notes.length, 4);
+  for (const t of [1, 2]) {
+    const pair = notes.filter((n) => near(n.time, t)).map((n) => n.lane).sort();
+    assertEqual([pair.length, pair[0] <= 1, pair[1] >= 2], [2, true, true]);
+  }
+});
