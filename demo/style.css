@@ -1,0 +1,149 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #0a0a14;
+  color: #e6e6ff;
+  font-family: "Consolas", "Courier New", monospace;
+}
+
+#game {
+  display: block;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px;
+  background: rgba(10, 10, 20, 0.85);
+  text-align: center;
+}
+
+.hidden {
+  display: none;
+}
+
+.neon-title {
+  margin: 0 0 16px;
+  font-size: clamp(36px, 9vw, 72px);
+  letter-spacing: 0.1em;
+  color: #fff;
+  text-shadow: 0 0 8px #ff2bd6, 0 0 24px #ff2bd6, 0 0 48px #2bd9ff;
+}
+
+.neon-title.small {
+  font-size: 48px;
+}
+
+#level-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: min(420px, 100%);
+}
+
+#level-list button {
+  width: 100%;
+  text-align: left;
+}
+
+.level-title {
+  display: block;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.level-info {
+  display: block;
+  margin-top: 4px;
+  font-size: 14px;
+  color: #9a9acc;
+}
+
+button {
+  min-width: 200px;
+  padding: 12px 20px;
+  font: inherit;
+  font-size: 18px;
+  color: #e6e6ff;
+  background: rgba(43, 217, 255, 0.08);
+  border: 2px solid #2bd9ff;
+  border-radius: 10px;
+  box-shadow: 0 0 12px rgba(43, 217, 255, 0.4);
+  cursor: pointer;
+}
+
+button:hover,
+button:focus-visible {
+  background: rgba(43, 217, 255, 0.25);
+  box-shadow: 0 0 24px rgba(43, 217, 255, 0.8);
+  outline: none;
+}
+
+.hint {
+  color: #9a9acc;
+}
+
+.grade {
+  font-size: 120px;
+  font-weight: bold;
+  line-height: 1;
+  color: #ffe32b;
+  text-shadow: 0 0 20px #ffe32b, 0 0 48px #ff2bd6;
+}
+
+.new-best {
+  margin: 0;
+  font-size: 24px;
+  font-weight: bold;
+  color: #3dff7a;
+  text-shadow: 0 0 12px #3dff7a;
+}
+
+.result-score {
+  margin: 0;
+  font-size: 40px;
+  font-weight: bold;
+}
+
+.stats td {
+  padding: 4px 16px;
+  font-size: 18px;
+}
+
+.stats td:first-child {
+  text-align: left;
+}
+
+.stats td:last-child {
+  text-align: right;
+}
+
+.perfect {
+  color: #2bd9ff;
+}
+
+.good {
+  color: #3dff7a;
+}
+
+.miss {
+  color: #ff4d6d;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+}
