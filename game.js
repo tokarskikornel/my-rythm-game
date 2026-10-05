@@ -102,11 +102,93 @@ function startLevel(level) {
   const lastNote = game.notes.length ? game.notes[game.notes.length - 1].time : 0;
   game.endTime = lastNote + LEVEL_END_DELAY;
   game.clock.start();
-  game.screen = "playing";
+  showScreen("playing");
 }
 
 function endLevel() {
-  game.screen = "results";
+  const { score } = game.score;
+  const isNewBest = score > loadBest(game.level.id);
+  if (isNewBest) saveBest(game.level.id, score);
+
+  const accuracy = Rules.accuracy(game.score);
+  document.getElementById("result-grade").textContent = Rules.grade(accuracy);
+  document.getElementById("result-new-best").classList.toggle("hidden", !isNewBest);
+  document.getElementById("result-score").textContent = score;
+  document.getElementById("result-perfect").textContent = game.score.perfect;
+  document.getElementById("result-good").textContent = game.score.good;
+  document.getElementById("result-miss").textContent = game.score.miss;
+  document.getElementById("result-max-combo").textContent = game.score.maxCombo;
+  document.getElementById("result-accuracy").textContent = Math.round(accuracy * 100) + "%";
+  showScreen("results");
+}
+
+// --- Ekrany ---
+
+function showScreen(name) {
+  game.screen = name;
+  document.getElementById("menu").classList.toggle("hidden", name !== "menu");
+  document.getElementById("pause").classList.toggle("hidden", name !== "paused");
+  document.getElementById("results").classList.toggle("hidden", name !== "results");
+}
+
+function pauseGame() {
+  if (game.screen !== "playing") return;
+  game.clock.pause();
+  game.pressed.fill(false);
+  showScreen("paused");
+}
+
+function resumeGame() {
+  if (game.screen !== "paused") return;
+  game.clock.resume();
+  showScreen("playing");
+}
+
+function showMenu() {
+  game.level = null; // pusta plansza za menu
+  renderLevelList();
+  showScreen("menu");
+}
+
+function renderLevelList() {
+  const list = document.getElementById("level-list");
+  list.replaceChildren();
+  for (const level of window.LEVELS) {
+    const button = document.createElement("button");
+    const title = document.createElement("span");
+    title.className = "level-title";
+    title.textContent = level.title;
+    const info = document.createElement("span");
+    info.className = "level-info";
+    info.textContent = level.artist + " · Rekord: " + loadBest(level.id);
+    button.append(title, info);
+    button.addEventListener("click", () => {
+      button.blur();
+      startLevel(level);
+    });
+    const item = document.createElement("li");
+    item.append(button);
+    list.append(item);
+  }
+}
+
+// --- Rekordy ---
+// localStorage może być zablokowany (np. tryb prywatny) — wtedy gra działa bez rekordów.
+
+function loadBest(levelId) {
+  try {
+    return Number(localStorage.getItem("neon-rhythm:best:" + levelId)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveBest(levelId, score) {
+  try {
+    localStorage.setItem("neon-rhythm:best:" + levelId, String(score));
+  } catch {
+    // brak miejsca albo zablokowany localStorage — rekord po prostu się nie zapisze
+  }
 }
 
 // Zalicza nutę jako PERFECT / GOOD / MISS: aktualizuje wynik i dodaje efekty.
@@ -295,6 +377,11 @@ requestAnimationFrame(frame);
 // event.code to fizyczny klawisz, więc Caps Lock ani układ klawiatury nie przeszkadzają.
 
 window.addEventListener("keydown", (event) => {
+  if (event.code === "Escape" && !event.repeat) {
+    if (game.screen === "playing") pauseGame();
+    else if (game.screen === "paused") resumeGame();
+    return;
+  }
   const lane = LANE_KEYS.indexOf(event.code);
   if (lane === -1) return;
   game.pressed[lane] = true;
@@ -311,10 +398,29 @@ window.addEventListener("keyup", (event) => {
   if (lane !== -1) game.pressed[lane] = false;
 });
 
-// Po przełączeniu okna przeglądarka nie wyśle keyup — gasimy wszystkie klawisze.
-window.addEventListener("blur", () => game.pressed.fill(false));
-
-// Tymczasowo: kliknięcie startuje pierwszy poziom (menu pojawi się w zadaniu 4).
-window.addEventListener("click", () => {
-  if (game.screen !== "playing") startLevel(window.LEVELS[0]);
+// Przełączenie okna lub karty w trakcie gry = automatyczna pauza.
+// Do tego przeglądarka nie wyśle wtedy keyup, więc gasimy wszystkie klawisze.
+window.addEventListener("blur", () => {
+  game.pressed.fill(false);
+  pauseGame();
 });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) pauseGame();
+});
+
+// --- Przyciski ---
+// blur() zdejmuje fokus z przycisku, żeby Spacja/Enter w grze go ponownie nie "klikały".
+
+function onClick(id, action) {
+  document.getElementById(id).addEventListener("click", (event) => {
+    event.currentTarget.blur();
+    action();
+  });
+}
+
+onClick("resume-button", resumeGame);
+onClick("pause-menu-button", showMenu);
+onClick("retry-button", () => startLevel(game.level));
+onClick("results-menu-button", showMenu);
+
+showMenu();

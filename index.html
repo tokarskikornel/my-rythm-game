@@ -10,9 +10,34 @@
   <canvas id="game"></canvas>
 
   <!-- Ekrany nałożone na grę. Pokazuje je game.js. -->
-  <div id="menu" class="overlay hidden"></div>
-  <div id="pause" class="overlay hidden"></div>
-  <div id="results" class="overlay hidden"></div>
+  <div id="menu" class="overlay">
+    <h1 class="neon-title">NEON RHYTHM</h1>
+    <ul id="level-list"></ul>
+    <p class="hint">Klawisze: D F J K · Esc = pauza</p>
+  </div>
+
+  <div id="pause" class="overlay hidden">
+    <h2 class="neon-title small">PAUZA</h2>
+    <button id="resume-button">Wznów</button>
+    <button id="pause-menu-button">Menu</button>
+  </div>
+
+  <div id="results" class="overlay hidden">
+    <div id="result-grade" class="grade"></div>
+    <p id="result-new-best" class="new-best hidden">NOWY REKORD!</p>
+    <p id="result-score" class="result-score"></p>
+    <table class="stats">
+      <tr><td class="perfect">PERFECT</td><td id="result-perfect"></td></tr>
+      <tr><td class="good">GOOD</td><td id="result-good"></td></tr>
+      <tr><td class="miss">MISS</td><td id="result-miss"></td></tr>
+      <tr><td>Najdłuższe combo</td><td id="result-max-combo"></td></tr>
+      <tr><td>Celność</td><td id="result-accuracy"></td></tr>
+    </table>
+    <div class="buttons">
+      <button id="retry-button">Zagraj jeszcze</button>
+      <button id="results-menu-button">Menu</button>
+    </div>
+  </div>
 
   <script src="rules.js"></script>
   <script src="levels/test-beat.js"></script>
