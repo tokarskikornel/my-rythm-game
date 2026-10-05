@@ -11,7 +11,9 @@ const LANE_WIDTH = 90;
 const HIT_LINE = 0.85; // linia trafienia na 85% wysokości ekranu
 const LEVEL_END_DELAY = 1.0; // ile sekund po ostatniej nucie kończy się poziom (bez muzyki)
 const LEAD_IN = 2; // sekundy rozbiegu przed startem muzyki
-const SYNC_TOLERANCE = 0.05; // większy rozjazd zegara i muzyki (s) = zegar dogania muzykę
+// Większy rozjazd zegara i muzyki (s) = zegar dogania muzykę.
+// Musi być wyraźnie mniejszy niż okno PERFECT (50 ms), żeby rozjazd nie zjadał trafień.
+const SYNC_TOLERANCE = 0.03;
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -56,6 +58,7 @@ const game = {
   clock: Clock.create(),
   nextBeat: 0,
   endTime: 0,
+  musicBroken: false, // true = piosenka nie chce zagrać, gramy bez niej
   pressed: [false, false, false, false], // które klawisze są teraz wciśnięte
   flashes: [], // błyski po trafieniach: { lane, at }
   lastJudgement: null, // ostatni napis: { judgement, at }
@@ -76,11 +79,18 @@ function startLevel(level) {
   game.lastJudgement = null;
 
   stopMusic();
+  game.musicBroken = false;
   if (level.music) {
     // Z muzyką: poziom kończy się razem z piosenką (zdarzenie "ended"), czas startuje od -2.
     if (music.getAttribute("src") !== level.music) music.src = level.music;
     game.endTime = Infinity;
     game.clock.start(-LEAD_IN);
+    // Plik, który już raz się nie wczytał, nie wyśle drugi raz zdarzenia "error".
+    if (music.error) musicFailed();
+    // Niektóre przeglądarki (np. Safari) pozwalają włączyć dźwięk tylko w chwili kliknięcia —
+    // "odblokowujemy" odtwarzacz teraz, a właściwy start nastąpi po rozbiegu.
+    music.play().catch(() => {});
+    music.pause();
   } else {
     game.endTime = lastNoteTime() + LEVEL_END_DELAY;
     game.clock.start(0);
@@ -103,22 +113,30 @@ function stopMusic() {
 
 // Startuje muzykę, gdy skończy się rozbieg, i pilnuje, żeby zegar gry nie odjechał od piosenki.
 function syncMusic(now) {
+  if (game.musicBroken) return;
   if (now >= 0 && music.paused && !music.ended) {
-    music.play().catch(() => {}); // błąd odtwarzania obsługuje zdarzenie "error"
+    music.play().catch((err) => {
+      // AbortError = sami zatrzymaliśmy muzykę (pauza). Każdy inny błąd = muzyka nie zagra.
+      if (err.name !== "AbortError") musicFailed();
+    });
   }
   if (!music.paused && Math.abs(music.currentTime - now) > SYNC_TOLERANCE) {
     game.clock.seek(music.currentTime);
   }
 }
 
+// Gdy piosenki nie da się odtworzyć, gramy dalej bez niej i kończymy po ostatniej nucie.
+function musicFailed() {
+  if (!game.level || !game.level.music) return;
+  game.musicBroken = true;
+  game.endTime = lastNoteTime() + LEVEL_END_DELAY;
+}
+
 music.addEventListener("ended", () => {
   if (game.screen === "playing" && game.level && game.level.music) endLevel();
 });
 
-// Gdy piosenki nie da się odtworzyć, gramy dalej bez niej i kończymy po ostatniej nucie.
-music.addEventListener("error", () => {
-  if (game.level && game.level.music) game.endTime = lastNoteTime() + LEVEL_END_DELAY;
-});
+music.addEventListener("error", musicFailed);
 
 function endLevel() {
   const { score } = game.score;
@@ -282,6 +300,8 @@ function update() {
 
   if (game.level.music) {
     syncMusic(now);
+    // Zapas: piosenka mogła się skończyć, gdy gra była w pauzie (wtedy "ended" nic nie zrobiło).
+    if (music.ended) return endLevel();
   } else {
     // Metronom: "tyk" na każde uderzenie, mocniejszy co 4.
     const beatLength = 60 / game.level.bpm;
