@@ -124,4 +124,49 @@ const Generator = {
     }
     return Generator.buildNotes(peaks);
   },
+
+  ANALYSIS_RATE: 22050, // do analizy wystarczy niższa jakość — liczy się szybciej
+
+  // Plik audio (bajty) → nuty. Rozdziela dźwięk na trzy pasma filtrami Web Audio.
+  // Rzuca błąd, gdy plik nie jest muzyką, której przeglądarka umie użyć.
+  async analyzeAudio(arrayBuffer) {
+    const rate = Generator.ANALYSIS_RATE;
+    const decoder = new OfflineAudioContext(1, 1, rate);
+    const audio = await decoder.decodeAudioData(arrayBuffer);
+
+    // Trzy kanały wyjścia: 0 = niskie, 1 = środkowe, 2 = wysokie.
+    const context = new OfflineAudioContext(3, Math.ceil(audio.duration * rate), rate);
+    const source = context.createBufferSource();
+    source.buffer = audio;
+    const merger = context.createChannelMerger(3);
+    const filters = [
+      { type: "lowpass", frequency: 150 },
+      { type: "bandpass", frequency: 1000, Q: 0.7 },
+      { type: "highpass", frequency: 4000 },
+    ];
+    filters.forEach((settings, channel) => {
+      const filter = context.createBiquadFilter();
+      filter.type = settings.type;
+      filter.frequency.value = settings.frequency;
+      if (settings.Q) filter.Q.value = settings.Q;
+      // Stereo → mono, żeby każde pasmo trafiło do jednego kanału.
+      filter.channelCount = 1;
+      filter.channelCountMode = "explicit";
+      source.connect(filter);
+      filter.connect(merger, 0, channel);
+    });
+    merger.connect(context.destination);
+    source.start();
+    const rendered = await context.startRendering();
+
+    const notes = Generator.generateNotes(
+      {
+        low: rendered.getChannelData(0),
+        mid: rendered.getChannelData(1),
+        high: rendered.getChannelData(2),
+      },
+      rate
+    );
+    return { notes, duration: audio.duration };
+  },
 };
