@@ -9,7 +9,11 @@ const FLASH_TIME = 0.3; // jak długo trwa błysk po trafieniu (s)
 const TEXT_TIME = 0.5; // jak długo widać napis PERFECT/GOOD/MISS (s)
 const LANE_WIDTH = 90;
 const HIT_LINE = 0.85; // linia trafienia na 85% wysokości ekranu
-const LEVEL_END_DELAY = 1.0; // ile sekund po ostatniej nucie kończy się poziom
+const LEVEL_END_DELAY = 1.0; // ile sekund po ostatniej nucie kończy się poziom (bez muzyki)
+const LEAD_IN = 2; // sekundy rozbiegu przed startem muzyki
+// Większy rozjazd zegara i muzyki (s) = zegar dogania muzykę.
+// Musi być wyraźnie mniejszy niż okno PERFECT (50 ms), żeby rozjazd nie zjadał trafień.
+const SYNC_TOLERANCE = 0.03;
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -29,33 +33,6 @@ function resize() {
 }
 window.addEventListener("resize", resize);
 resize();
-
-// Zegar gry w sekundach. W pauzie czas stoi w miejscu.
-function createClock() {
-  let startedAt = 0;
-  let pausedAt = null;
-  return {
-    start() {
-      startedAt = performance.now();
-      pausedAt = null;
-    },
-    now() {
-      const t = pausedAt === null ? performance.now() : pausedAt;
-      return (t - startedAt) / 1000;
-    },
-    pause() {
-      if (pausedAt === null) pausedAt = performance.now();
-    },
-    resume() {
-      if (pausedAt === null) return;
-      startedAt += performance.now() - pausedAt;
-      pausedAt = null;
-    },
-    isPaused() {
-      return pausedAt !== null;
-    },
-  };
-}
 
 // Dźwięk metronomu generowany przez Web Audio — bez plików z muzyką.
 let audioCtx = null;
@@ -78,9 +55,10 @@ const game = {
   level: null,
   notes: [],
   score: Rules.createScore(),
-  clock: createClock(),
+  clock: Clock.create(),
   nextBeat: 0,
   endTime: 0,
+  musicBroken: false, // true = piosenka nie chce zagrać, gramy bez niej
   pressed: [false, false, false, false], // które klawisze są teraz wciśnięte
   flashes: [], // błyski po trafieniach: { lane, at }
   lastJudgement: null, // ostatni napis: { judgement, at }
@@ -99,11 +77,66 @@ function startLevel(level) {
   game.nextBeat = 0;
   game.flashes = [];
   game.lastJudgement = null;
-  const lastNote = game.notes.length ? game.notes[game.notes.length - 1].time : 0;
-  game.endTime = lastNote + LEVEL_END_DELAY;
-  game.clock.start();
+
+  stopMusic();
+  game.musicBroken = false;
+  if (level.music) {
+    // Z muzyką: poziom kończy się razem z piosenką (zdarzenie "ended"), czas startuje od -2.
+    if (music.getAttribute("src") !== level.music) music.src = level.music;
+    game.endTime = Infinity;
+    game.clock.start(-LEAD_IN);
+    // Plik, który już raz się nie wczytał, nie wyśle drugi raz zdarzenia "error".
+    if (music.error) musicFailed();
+    // Niektóre przeglądarki (np. Safari) pozwalają włączyć dźwięk tylko w chwili kliknięcia —
+    // "odblokowujemy" odtwarzacz teraz, a właściwy start nastąpi po rozbiegu.
+    music.play().catch(() => {});
+    music.pause();
+  } else {
+    game.endTime = lastNoteTime() + LEVEL_END_DELAY;
+    game.clock.start(0);
+  }
   showScreen("playing");
 }
+
+function lastNoteTime() {
+  return game.notes.length ? game.notes[game.notes.length - 1].time : 0;
+}
+
+// --- Muzyka ---
+
+const music = document.getElementById("music");
+
+function stopMusic() {
+  music.pause();
+  if (music.currentTime > 0) music.currentTime = 0;
+}
+
+// Startuje muzykę, gdy skończy się rozbieg, i pilnuje, żeby zegar gry nie odjechał od piosenki.
+function syncMusic(now) {
+  if (game.musicBroken) return;
+  if (now >= 0 && music.paused && !music.ended) {
+    music.play().catch((err) => {
+      // AbortError = sami zatrzymaliśmy muzykę (pauza). Każdy inny błąd = muzyka nie zagra.
+      if (err.name !== "AbortError") musicFailed();
+    });
+  }
+  if (!music.paused && Math.abs(music.currentTime - now) > SYNC_TOLERANCE) {
+    game.clock.seek(music.currentTime);
+  }
+}
+
+// Gdy piosenki nie da się odtworzyć, gramy dalej bez niej i kończymy po ostatniej nucie.
+function musicFailed() {
+  if (!game.level || !game.level.music) return;
+  game.musicBroken = true;
+  game.endTime = lastNoteTime() + LEVEL_END_DELAY;
+}
+
+music.addEventListener("ended", () => {
+  if (game.screen === "playing" && game.level && game.level.music) endLevel();
+});
+
+music.addEventListener("error", musicFailed);
 
 function endLevel() {
   const { score } = game.score;
@@ -134,10 +167,12 @@ function showScreen(name) {
 function pauseGame() {
   if (game.screen !== "playing") return;
   game.clock.pause();
+  music.pause();
   game.pressed.fill(false);
   showScreen("paused");
 }
 
+// Muzykę wznowi syncMusic() w następnej klatce — także gdy pauza była jeszcze w rozbiegu.
 function resumeGame() {
   if (game.screen !== "paused") return;
   game.clock.resume();
@@ -145,6 +180,7 @@ function resumeGame() {
 }
 
 function showMenu() {
+  stopMusic();
   game.level = null; // pusta plansza za menu
   renderLevelList();
   showScreen("menu");
@@ -153,14 +189,16 @@ function showMenu() {
 function renderLevelList() {
   const list = document.getElementById("level-list");
   list.replaceChildren();
-  for (const level of window.LEVELS) {
+  for (const level of [...window.LEVELS, ...sessionLevels]) {
     const button = document.createElement("button");
     const title = document.createElement("span");
     title.className = "level-title";
     title.textContent = level.title;
     const info = document.createElement("span");
     info.className = "level-info";
-    info.textContent = level.artist + " · Rekord: " + loadBest(level.id);
+    const hasLicense = level.license && level.license !== "—";
+    const parts = [level.artist, hasLicense ? level.license : null, "Rekord: " + loadBest(level.id)];
+    info.textContent = parts.filter(Boolean).join(" · ");
     button.append(title, info);
     button.addEventListener("click", () => {
       button.blur();
@@ -171,6 +209,59 @@ function renderLevelList() {
     list.append(item);
   }
 }
+
+// --- Piosenki z komputera gracza ---
+// Plik zostaje w przeglądarce: czytamy go lokalnie i odtwarzamy przez adres "blob:".
+// Lista znika po zamknięciu strony, ale rekordy zostają (id = nazwa pliku + długość).
+
+const sessionLevels = [];
+const loadButton = document.getElementById("load-button");
+const fileInput = document.getElementById("file-input");
+const menuMessage = document.getElementById("menu-message");
+
+async function loadSongFile(file) {
+  loadButton.disabled = true;
+  menuMessage.textContent = "Analizuję piosenkę…";
+  try {
+    const { notes, duration } = await Generator.analyzeAudio(await file.arrayBuffer());
+    if (notes.length === 0) {
+      menuMessage.textContent = "Nie znaleziono rytmu w tej piosence";
+      return;
+    }
+    const level = {
+      id: "file:" + file.name + ":" + Math.floor(duration),
+      title: file.name.replace(/\.[^.]+$/, ""),
+      artist: "Twój plik",
+      license: "",
+      music: URL.createObjectURL(file),
+      notes,
+    };
+    // Ten sam plik drugi raz zastępuje starą pozycję zamiast ją dublować.
+    const existing = sessionLevels.findIndex((l) => l.id === level.id);
+    if (existing === -1) {
+      sessionLevels.push(level);
+    } else {
+      URL.revokeObjectURL(sessionLevels[existing].music);
+      sessionLevels[existing] = level;
+    }
+    menuMessage.textContent = "";
+    renderLevelList();
+  } catch {
+    menuMessage.textContent = "Nie udało się wczytać tej piosenki";
+  } finally {
+    loadButton.disabled = false;
+    fileInput.value = ""; // żeby ten sam plik dało się wybrać jeszcze raz
+  }
+}
+
+loadButton.addEventListener("click", () => {
+  loadButton.blur();
+  fileInput.click();
+});
+
+fileInput.addEventListener("change", () => {
+  if (fileInput.files[0]) loadSongFile(fileInput.files[0]);
+});
 
 // --- Rekordy ---
 // localStorage może być zablokowany (np. tryb prywatny) — wtedy gra działa bez rekordów.
@@ -207,11 +298,17 @@ function update() {
   for (const index of Rules.findMissedNotes(game.notes, now)) judge(index, "MISS");
   game.flashes = game.flashes.filter((f) => now - f.at < FLASH_TIME);
 
-  // Metronom: "tyk" na każde uderzenie, mocniejszy co 4.
-  const beatLength = 60 / game.level.bpm;
-  while (now >= game.nextBeat * beatLength) {
-    playClick(game.nextBeat % 4 === 0);
-    game.nextBeat++;
+  if (game.level.music) {
+    syncMusic(now);
+    // Zapas: piosenka mogła się skończyć, gdy gra była w pauzie (wtedy "ended" nic nie zrobiło).
+    if (music.ended) return endLevel();
+  } else {
+    // Metronom: "tyk" na każde uderzenie, mocniejszy co 4.
+    const beatLength = 60 / game.level.bpm;
+    while (now >= game.nextBeat * beatLength) {
+      playClick(game.nextBeat % 4 === 0);
+      game.nextBeat++;
+    }
   }
 
   if (now > game.endTime) endLevel();

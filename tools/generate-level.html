@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neon Rhythm — generator poziomów</title>
+  <style>
+    body { background: #0a0a14; color: #e6e6ff; font-family: Consolas, monospace; padding: 16px; max-width: 800px; margin: 0 auto; }
+    h1 { color: #fff; text-shadow: 0 0 12px #ff2bd6; }
+    label { display: block; margin: 12px 0 4px; color: #9a9acc; }
+    input[type="text"] { width: 100%; padding: 8px; background: #14142a; color: #e6e6ff; border: 1px solid #2bd9ff; border-radius: 6px; font: inherit; }
+    textarea { width: 100%; height: 320px; margin-top: 12px; background: #14142a; color: #3dff7a; border: 1px solid #2bd9ff; border-radius: 6px; font: 12px Consolas, monospace; }
+    #status { margin-top: 12px; color: #ffe32b; }
+  </style>
+</head>
+<body>
+  <h1>Generator poziomów</h1>
+  <p>Wybierz plik z muzyką (tylko na darmowej licencji, jeśli poziom ma trafić do repo!).
+     Skopiuj wynik do <code>levels/&lt;id&gt;.js</code>, plik muzyki wrzuć do <code>music/</code>
+     i dopisz <code>&lt;script src="levels/&lt;id&gt;.js"&gt;</code> w <code>index.html</code>.</p>
+
+  <label for="id">id (bez spacji, np. moja-piosenka)</label>
+  <input type="text" id="id" value="nowa-piosenka">
+  <label for="title">Tytuł</label>
+  <input type="text" id="title" value="Nowa piosenka">
+  <label for="artist">Autor</label>
+  <input type="text" id="artist" value="">
+  <label for="license">Licencja (np. CC BY 4.0)</label>
+  <input type="text" id="license" value="">
+  <label for="file">Plik z muzyką</label>
+  <input type="file" id="file" accept="audio/*">
+
+  <p id="status"></p>
+  <textarea id="output" readonly></textarea>
+
+  <script src="../generator.js"></script>
+  <script>
+    const status = document.getElementById("status");
+    const value = (id) => document.getElementById(id).value.trim();
+
+    document.getElementById("file").addEventListener("change", async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      status.textContent = "Analizuję piosenkę…";
+      try {
+        const { notes, duration } = await Generator.analyzeAudio(await file.arrayBuffer());
+        const id = value("id");
+        const level = {
+          id,
+          title: value("title"),
+          artist: value("artist"),
+          license: value("license"),
+          music: "music/" + file.name,
+        };
+        const header = JSON.stringify(level, null, 2).slice(0, -2); // bez końcowego "}"
+        const noteLines = notes.map((n) => "    { time: " + n.time + ", lane: " + n.lane + " },").join("\n");
+        document.getElementById("output").value =
+          "window.LEVELS = window.LEVELS || [];\nwindow.LEVELS.push(" + header + ",\n  \"notes\": [\n" + noteLines + "\n  ]\n});\n";
+        status.textContent = "Gotowe: " + notes.length + " nut w " + Math.round(duration) + " s.";
+      } catch (err) {
+        status.textContent = "Nie udało się wczytać tej piosenki (" + err.message + ")";
+      }
+    });
+  </script>
+</body>
+</html>

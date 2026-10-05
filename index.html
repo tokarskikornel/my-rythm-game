@@ -8,11 +8,15 @@
 </head>
 <body>
   <canvas id="game"></canvas>
+  <audio id="music" preload="auto"></audio>
 
   <!-- Ekrany nałożone na grę. Pokazuje je game.js. -->
   <div id="menu" class="overlay">
     <h1 class="neon-title">NEON RHYTHM</h1>
     <ul id="level-list"></ul>
+    <button id="load-button" class="load-button">🎵 Wczytaj piosenkę z komputera</button>
+    <input type="file" id="file-input" accept="audio/*" class="hidden">
+    <p id="menu-message" class="menu-message"></p>
     <p class="hint">Klawisze: D F J K · Esc = pauza</p>
   </div>
 
@@ -40,7 +44,10 @@
   </div>
 
   <script src="rules.js"></script>
+  <script src="clock.js"></script>
+  <script src="generator.js"></script>
   <script src="levels/test-beat.js"></script>
+  <script src="levels/garage-baker.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
