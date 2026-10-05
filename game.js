@@ -171,7 +171,7 @@ function showMenu() {
 function renderLevelList() {
   const list = document.getElementById("level-list");
   list.replaceChildren();
-  for (const level of window.LEVELS) {
+  for (const level of [...window.LEVELS, ...sessionLevels]) {
     const button = document.createElement("button");
     const title = document.createElement("span");
     title.className = "level-title";
@@ -191,6 +191,59 @@ function renderLevelList() {
     list.append(item);
   }
 }
+
+// --- Piosenki z komputera gracza ---
+// Plik zostaje w przeglądarce: czytamy go lokalnie i odtwarzamy przez adres "blob:".
+// Lista znika po zamknięciu strony, ale rekordy zostają (id = nazwa pliku + długość).
+
+const sessionLevels = [];
+const loadButton = document.getElementById("load-button");
+const fileInput = document.getElementById("file-input");
+const menuMessage = document.getElementById("menu-message");
+
+async function loadSongFile(file) {
+  loadButton.disabled = true;
+  menuMessage.textContent = "Analizuję piosenkę…";
+  try {
+    const { notes, duration } = await Generator.analyzeAudio(await file.arrayBuffer());
+    if (notes.length === 0) {
+      menuMessage.textContent = "Nie znaleziono rytmu w tej piosence";
+      return;
+    }
+    const level = {
+      id: "file:" + file.name + ":" + Math.floor(duration),
+      title: file.name.replace(/\.[^.]+$/, ""),
+      artist: "Twój plik",
+      license: "",
+      music: URL.createObjectURL(file),
+      notes,
+    };
+    // Ten sam plik drugi raz zastępuje starą pozycję zamiast ją dublować.
+    const existing = sessionLevels.findIndex((l) => l.id === level.id);
+    if (existing === -1) {
+      sessionLevels.push(level);
+    } else {
+      URL.revokeObjectURL(sessionLevels[existing].music);
+      sessionLevels[existing] = level;
+    }
+    menuMessage.textContent = "";
+    renderLevelList();
+  } catch {
+    menuMessage.textContent = "Nie udało się wczytać tej piosenki";
+  } finally {
+    loadButton.disabled = false;
+    fileInput.value = ""; // żeby ten sam plik dało się wybrać jeszcze raz
+  }
+}
+
+loadButton.addEventListener("click", () => {
+  loadButton.blur();
+  fileInput.click();
+});
+
+fileInput.addEventListener("change", () => {
+  if (fileInput.files[0]) loadSongFile(fileInput.files[0]);
+});
 
 // --- Rekordy ---
 // localStorage może być zablokowany (np. tryb prywatny) — wtedy gra działa bez rekordów.

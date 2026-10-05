@@ -52,6 +52,10 @@ body {
   width: min(420px, 100%);
 }
 
+#level-list li + li {
+  margin-top: 12px;
+}
+
 #level-list button {
   width: 100%;
   text-align: left;
@@ -88,6 +92,30 @@ button:focus-visible {
   background: rgba(43, 217, 255, 0.25);
   box-shadow: 0 0 24px rgba(43, 217, 255, 0.8);
   outline: none;
+}
+
+.load-button {
+  width: min(420px, 100%);
+  border-color: #ff2bd6;
+  background: rgba(255, 43, 214, 0.08);
+  box-shadow: 0 0 12px rgba(255, 43, 214, 0.4);
+}
+
+.load-button:hover,
+.load-button:focus-visible {
+  background: rgba(255, 43, 214, 0.25);
+  box-shadow: 0 0 24px rgba(255, 43, 214, 0.8);
+}
+
+.load-button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.menu-message {
+  min-height: 1.2em;
+  margin: 0;
+  color: #ffe32b;
 }
 
 .hint {
