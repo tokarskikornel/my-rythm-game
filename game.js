@@ -30,33 +30,6 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-// Zegar gry w sekundach. W pauzie czas stoi w miejscu.
-function createClock() {
-  let startedAt = 0;
-  let pausedAt = null;
-  return {
-    start() {
-      startedAt = performance.now();
-      pausedAt = null;
-    },
-    now() {
-      const t = pausedAt === null ? performance.now() : pausedAt;
-      return (t - startedAt) / 1000;
-    },
-    pause() {
-      if (pausedAt === null) pausedAt = performance.now();
-    },
-    resume() {
-      if (pausedAt === null) return;
-      startedAt += performance.now() - pausedAt;
-      pausedAt = null;
-    },
-    isPaused() {
-      return pausedAt !== null;
-    },
-  };
-}
-
 // Dźwięk metronomu generowany przez Web Audio — bez plików z muzyką.
 let audioCtx = null;
 
@@ -78,7 +51,7 @@ const game = {
   level: null,
   notes: [],
   score: Rules.createScore(),
-  clock: createClock(),
+  clock: Clock.create(),
   nextBeat: 0,
   endTime: 0,
   pressed: [false, false, false, false], // które klawisze są teraz wciśnięte

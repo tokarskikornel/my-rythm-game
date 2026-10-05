@@ -74,3 +74,62 @@ test("findMissedNotes zwraca przegapione, nie trafione", () => {
                  { time: 1.95, lane: 2, judged: false }];
   assertEqual(Rules.findMissedNotes(notes, 2.0), [0]);
 });
+
+// --- Zegar (clock.js) ---
+// Czas sterujemy ręcznie przez zmienną ms, zamiast czekać naprawdę.
+
+test("zegar startuje od podanego czasu", () => {
+  let ms = 0;
+  const c = Clock.create(() => ms);
+  c.start(-2);
+  assertEqual(c.now(), -2);
+  ms = 500;
+  assertEqual(c.now(), -1.5);
+});
+
+test("pauza zatrzymuje zegar", () => {
+  let ms = 0;
+  const c = Clock.create(() => ms);
+  c.start();
+  ms = 1000;
+  c.pause();
+  ms = 5000;
+  assertEqual([c.now(), c.isPaused()], [1, true]);
+});
+
+test("wznowienie kontynuuje bez skoku", () => {
+  let ms = 0;
+  const c = Clock.create(() => ms);
+  c.start();
+  ms = 1000;
+  c.pause();
+  ms = 5000;
+  c.resume();
+  assertEqual(c.now(), 1);
+  ms = 5500;
+  assertEqual(c.now(), 1.5);
+});
+
+test("seek w trakcie gry", () => {
+  let ms = 0;
+  const c = Clock.create(() => ms);
+  c.start();
+  ms = 1000;
+  c.seek(10);
+  assertEqual(c.now(), 10);
+  ms = 2000;
+  assertEqual(c.now(), 11);
+});
+
+test("seek w pauzie", () => {
+  let ms = 0;
+  const c = Clock.create(() => ms);
+  c.start();
+  c.pause();
+  c.seek(3);
+  ms = 9000;
+  assertEqual(c.now(), 3);
+  c.resume();
+  ms = 10000;
+  assertEqual(c.now(), 4);
+});
