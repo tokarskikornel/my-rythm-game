@@ -9,7 +9,9 @@ const FLASH_TIME = 0.3; // jak długo trwa błysk po trafieniu (s)
 const TEXT_TIME = 0.5; // jak długo widać napis PERFECT/GOOD/MISS (s)
 const LANE_WIDTH = 90;
 const HIT_LINE = 0.85; // linia trafienia na 85% wysokości ekranu
-const LEVEL_END_DELAY = 1.0; // ile sekund po ostatniej nucie kończy się poziom
+const LEVEL_END_DELAY = 1.0; // ile sekund po ostatniej nucie kończy się poziom (bez muzyki)
+const LEAD_IN = 2; // sekundy rozbiegu przed startem muzyki
+const SYNC_TOLERANCE = 0.05; // większy rozjazd zegara i muzyki (s) = zegar dogania muzykę
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -72,11 +74,51 @@ function startLevel(level) {
   game.nextBeat = 0;
   game.flashes = [];
   game.lastJudgement = null;
-  const lastNote = game.notes.length ? game.notes[game.notes.length - 1].time : 0;
-  game.endTime = lastNote + LEVEL_END_DELAY;
-  game.clock.start();
+
+  stopMusic();
+  if (level.music) {
+    // Z muzyką: poziom kończy się razem z piosenką (zdarzenie "ended"), czas startuje od -2.
+    if (music.getAttribute("src") !== level.music) music.src = level.music;
+    game.endTime = Infinity;
+    game.clock.start(-LEAD_IN);
+  } else {
+    game.endTime = lastNoteTime() + LEVEL_END_DELAY;
+    game.clock.start(0);
+  }
   showScreen("playing");
 }
+
+function lastNoteTime() {
+  return game.notes.length ? game.notes[game.notes.length - 1].time : 0;
+}
+
+// --- Muzyka ---
+
+const music = document.getElementById("music");
+
+function stopMusic() {
+  music.pause();
+  if (music.currentTime > 0) music.currentTime = 0;
+}
+
+// Startuje muzykę, gdy skończy się rozbieg, i pilnuje, żeby zegar gry nie odjechał od piosenki.
+function syncMusic(now) {
+  if (now >= 0 && music.paused && !music.ended) {
+    music.play().catch(() => {}); // błąd odtwarzania obsługuje zdarzenie "error"
+  }
+  if (!music.paused && Math.abs(music.currentTime - now) > SYNC_TOLERANCE) {
+    game.clock.seek(music.currentTime);
+  }
+}
+
+music.addEventListener("ended", () => {
+  if (game.screen === "playing" && game.level && game.level.music) endLevel();
+});
+
+// Gdy piosenki nie da się odtworzyć, gramy dalej bez niej i kończymy po ostatniej nucie.
+music.addEventListener("error", () => {
+  if (game.level && game.level.music) game.endTime = lastNoteTime() + LEVEL_END_DELAY;
+});
 
 function endLevel() {
   const { score } = game.score;
@@ -107,10 +149,12 @@ function showScreen(name) {
 function pauseGame() {
   if (game.screen !== "playing") return;
   game.clock.pause();
+  music.pause();
   game.pressed.fill(false);
   showScreen("paused");
 }
 
+// Muzykę wznowi syncMusic() w następnej klatce — także gdy pauza była jeszcze w rozbiegu.
 function resumeGame() {
   if (game.screen !== "paused") return;
   game.clock.resume();
@@ -118,6 +162,7 @@ function resumeGame() {
 }
 
 function showMenu() {
+  stopMusic();
   game.level = null; // pusta plansza za menu
   renderLevelList();
   showScreen("menu");
@@ -133,7 +178,9 @@ function renderLevelList() {
     title.textContent = level.title;
     const info = document.createElement("span");
     info.className = "level-info";
-    info.textContent = level.artist + " · Rekord: " + loadBest(level.id);
+    const hasLicense = level.license && level.license !== "—";
+    const parts = [level.artist, hasLicense ? level.license : null, "Rekord: " + loadBest(level.id)];
+    info.textContent = parts.filter(Boolean).join(" · ");
     button.append(title, info);
     button.addEventListener("click", () => {
       button.blur();
@@ -180,11 +227,15 @@ function update() {
   for (const index of Rules.findMissedNotes(game.notes, now)) judge(index, "MISS");
   game.flashes = game.flashes.filter((f) => now - f.at < FLASH_TIME);
 
-  // Metronom: "tyk" na każde uderzenie, mocniejszy co 4.
-  const beatLength = 60 / game.level.bpm;
-  while (now >= game.nextBeat * beatLength) {
-    playClick(game.nextBeat % 4 === 0);
-    game.nextBeat++;
+  if (game.level.music) {
+    syncMusic(now);
+  } else {
+    // Metronom: "tyk" na każde uderzenie, mocniejszy co 4.
+    const beatLength = 60 / game.level.bpm;
+    while (now >= game.nextBeat * beatLength) {
+      playClick(game.nextBeat % 4 === 0);
+      game.nextBeat++;
+    }
   }
 
   if (now > game.endTime) endLevel();
